@@ -43,7 +43,7 @@ files, losing edits, or losing the previous report backup.
   path for interrupted runs. Never sweep unrelated temporary directories.
 - [ ] Test that disabled apps and excluded chats contribute no message bodies.
 
-Done when the user can see and change the collection scope in conversation,
+Done when the user can see and change collection scope through the setup wizard,
 without editing JSON or sharing histories with an unselected runtime.
 
 ## 3. Choose a runtime model and record what actually ran
@@ -131,11 +131,35 @@ their machine, understand its limits, and find the recap worth using again.
 
 ## Keep setup small
 
-Use a guided conversation with these choices: apps and scope, report location,
-runtime model, a sample date, then optional scheduling after sample acceptance.
-Detect the timezone and suggest safe defaults. Put advanced choices behind
-follow-up questions. Save necessary choices in one private preferences file;
-keep report metadata and delivery state as runtime bookkeeping.
+Build an interactive terminal wizard, invoked with `python3 cli.py setup`.
+Use one screen per decision, arrow-key selection, Space for checkboxes, Enter
+to continue, Back to revisit choices, and Escape or Ctrl+C to cancel. Keep a
+numbered-input fallback for terminals that cannot render interactive controls.
+Paths are short text fields. No free-form setup conversation or settings dashboard.
+
+- [ ] Add interactive setup when no setup flags are supplied. Keep explicit flags
+  for repeatable scripted setup; reject missing input in noninteractive sessions.
+- [ ] Show detected sources with availability labels; only user-selected sources
+  become enabled. Never interpret a default highlight or EOF as consent.
+- [ ] Use screens for sources, folders, report storage, model, and final review.
+  Show advanced exclusions and timezone overrides only when requested or needed.
+- [ ] Prefill saved choices on rerun. Save all changes atomically only after the
+  final confirmation; cancellation leaves existing settings and reports untouched.
+- [ ] Test menu state, Back, cancellation, invalid paths, and numbered fallback.
+- [ ] Keep one private preferences file. Prefer a small standard-library terminal
+  implementation; do not add Node or a full TUI framework for setup alone.
+
+A standalone terminal cannot assume access to desktop ChatGPT tools or a model
+catalog. Let it save a pending choice, then verify it in the supported desktop
+runtime before the sample. If a supported bridge provides actual runtime data,
+show it; otherwise say "Check in desktop" rather than inventing detected access.
+Desktop-only chat exclusions can use a selectable list there when supported,
+or an optional ID field. Do not scrape the browser to populate a terminal menu.
+
+The final screen summarizes scope, output folder, model policy, and data handling.
+After saving, show the command to request the first sample in the desktop agent.
+Offer scheduling only after that sample is accepted and runtime checks pass.
+Keep the existing history sources and defer arbitrary provider/API configuration.
 
 Use [the target example](docs/workflow-example.md) as the acceptance walkthrough.
-Do not build a setup UI, credential manager, or plugin system for these tasks.
+The wizard is planned work; the current CLI still requires setup flags.

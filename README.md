@@ -8,7 +8,8 @@ reports and show missing days.
 Codex desktop. Python prepares dated evidence and saves files; the current
 agent writes the report. The public-beta work is tracked in [TODO.md](TODO.md).
 The [setup and usage example](docs/workflow-example.md) separates today's
-workflow from the proposed setup improvements.
+workflow from the proposed terminal setup wizard. The planned wizard uses menus,
+checkboxes, and a final review screen; it is not implemented yet.
 
 ## What works today
 

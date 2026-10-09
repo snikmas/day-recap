@@ -1,72 +1,164 @@
 # Setup and daily-use example
 
-This is a synthetic walkthrough. The guided setup below is the **target after
-TODO 2 and 3**, not a transcript or a claim that those choices already work.
-Today, setup supports work roots, exclusions, storage, and timezone; the skill
-requires a fixed model and does not offer per-app selection.
+**Design preview, not implemented.** These screens show the planned terminal
+wizard. Today, the CLI requires explicit setup flags, the skill requires a fixed
+model, and per-app selection is unavailable. All paths and selections below are
+illustrative. No personal histories are included.
 
-## First setup
+## Interaction references
 
-**User:** `$day-recap setup`
+[Hermes setup](https://github.com/NousResearch/hermes-agent/blob/main/hermes_cli/setup.py)
+uses single-select menus, checklists, defaults, and back/cancel navigation.
+[Matt Pocock's setup skill](https://github.com/mattpocock/skills/blob/main/skills/engineering/setup-matt-pocock-skills/SKILL.md)
+is prompt-driven: it inspects existing state, recommends answers, and skips
+irrelevant questions. Its skills installer also offers selection of skills and
+agents. Daily Recap adopts terminal controls and short, conditional steps.
 
-**Assistant:** I found Codex and OpenCode history locations. ChatGPT history
-tools are available in this chat. I have not read message bodies. Which sources
-should the recap include?
+## Start setup
 
-**User:** Codex and ChatGPT. Leave OpenCode out.
+The planned entry point is:
 
-**Assistant:** Which project folders should I include for Codex? ChatGPT can
-include the accessible chats across all topics; you can exclude individual chats.
+```sh
+python3 cli.py setup
+```
 
-**User:** Use `~/projects`. Exclude `~/projects/private-client`. Leave out my
-ChatGPT chat called "Personal journal".
+A small wizard appears in the terminal. Existing settings are prefilled on rerun.
+Use arrows to move, Space to toggle, and Enter to continue. Back revisits a step;
+Escape or Ctrl+C cancels without saving. A numbered-input fallback provides the
+same choices when interactive controls are unavailable.
 
-**Assistant:** I will exclude that chat, the private-client folder, and this
-recap workspace. Where should reports go? A separate `~/daily-recaps` folder
-would keep them outside your projects.
+## 1. Choose conversation sources
 
-**User:** Use that folder.
+The wizard checks known history locations without reading message bodies.
+Sources begin unchecked on first setup. This example shows the user's choices
+just before continuing:
 
-**Assistant:** Use this chat's current model for writing, or choose another
-model available in this same app? Using the current model needs no extra API key.
+```text
+Daily Recap setup                              1 / 5
 
-**User:** Use the current model.
+Include conversations from:
 
-**Assistant:** Your timezone was detected from the computer. Selected conversation
-text will be processed by this chat's model. Reports stay in your chosen folder
-and may contain personal information. ChatGPT access can be incomplete. Shall I
-generate yesterday's sample with these choices?
+  [x] Codex              History location found
+  [ ] OpenCode           History location found
+  [x] ChatGPT            Access checked later in desktop
+  [-] Cursor             Message bodies unavailable
 
-**User:** Yes.
+  Other supported sources: not detected
 
-If the user asks for a different model, show only options supplied by a supported
-runtime capability. If no list is available, ask them to choose in the host app
-and verify the execution context afterward. Do not invent options from installed
-apps, read credential files, or promise arbitrary provider support.
+Space toggle   Enter continue   Esc cancel
+```
 
-## What happens during the sample
+The checked ChatGPT option is a request to include it, not proof of access.
+Do not scan for more providers or read their configuration files. Keep the
+existing reader set for v1.
 
-1. Check for an existing completed report before collecting histories.
-2. Read only selected, eligible sources and collect accessible ChatGPT pages.
-3. Select the local day, apply exclusions, remove duplicates, and split evidence.
-4. Review every segment and write a draft grounded in the messages.
-5. Save the report and compact source metadata, then show the saved report.
-6. Checkpoint delivery and remove task-owned temporary extraction files.
+## 2. Choose folders
 
-**Assistant:** Yesterday's report is saved. Codex coverage was readable. Some
-ChatGPT replies were unavailable, so that part is incomplete. Does this length
-and level of detail work for you?
+```text
+Project folders to include                     2 / 5
 
-**User:** Make it shorter next time.
+  ~/projects
 
-**Assistant:** I will use a shorter recap. Keep reports manual, or choose a
-daily time? Scheduling remains experimental until this installation passes
-the runtime and recovery checks.
+Excluded folders:
+  ~/projects/private-client
 
-**User:** Manual for now.
+  [+ Add folder]  [+ Add exclusion]
 
-Length preferences can remain in the existing recap chat for v1. Persistent
-style presets across new chats are outside the required setup changes.
+The recap workspace and report storage are excluded automatically.
+
+[Back]  [Continue]
+```
+
+Only show coding-folder selection if a local coding source was selected.
+ChatGPT exclusions are separate from folder filters. Offer an optional chat-ID
+field, or a selectable chat list when the desktop host actually provides one.
+Do not pretend the standalone terminal can enumerate desktop conversations.
+
+## 3. Choose report storage
+
+```text
+Save reports                                  3 / 5
+
+Folder:    ~/daily-recaps
+Timezone:  Detected from this computer    [Change]
+
+[Back]  [Continue]
+```
+
+Validate paths and report directory access. Do not ask about timezone unless
+it cannot be detected or the user selects Change. Show the actual detected
+zone in the real wizard; the text above is an illustrative label.
+
+## 4. Choose the writing model
+
+```text
+Writing model                                 4 / 5
+
+> Use the model selected in Codex desktop  (recommended)
+  Choose a specific model in Codex desktop
+
+Runtime/model availability: check in desktop before the sample.
+No additional API key is needed for the existing runtime.
+
+[Back]  [Continue]
+```
+
+When a supported host integration returns an available model list, the second
+option opens a searchable selection menu populated from that list. Otherwise
+it records a pending choice and gives a short instruction to choose in the host.
+It must not invent model names or treat installed apps as working providers.
+Actual model and history-tool availability must be checked before generation.
+
+Arbitrary API providers and local model endpoints remain outside v1. The model
+choice does not change which apps supply conversation histories.
+
+## 5. Review and save
+
+```text
+Review setup                                  5 / 5
+
+Sources       Codex, ChatGPT (desktop check pending)
+Work folders  ~/projects
+Excluded      ~/projects/private-client + recap workspace/storage
+Reports       ~/daily-recaps
+Model         Use the selection in Codex desktop
+Schedule      Manual
+
+Selected conversation text will be processed by the desktop model.
+Reports can contain private information. ChatGPT coverage may be incomplete.
+
+[Back]  [Save setup]  [Cancel]
+```
+
+Save one private preferences file only when Save setup is selected. Do not
+start history collection, a model call, or a schedule merely by saving setup.
+After a successful save:
+
+```text
+Setup saved.
+
+Next: open your Codex desktop recap chat and run:
+  $day-recap yesterday
+
+Before writing, the skill will verify the requested model and history access.
+To change these settings later: python3 cli.py setup
+```
+
+The terminal prepares settings. Report generation still runs through the
+supported desktop agent. This handoff keeps the existing runtime without adding
+a separate summarization client or falsely promising a standalone terminal app.
+
+## Generate the sample
+
+The user requests `$day-recap yesterday` in the desktop chat. The agent checks
+runtime access and explains unresolved choices before reading selected histories.
+It then collects evidence, applies date and scope filters, reviews each segment,
+writes and saves a report, displays it, records delivery, and cleans temporary
+extraction files. An existing completed report is reused.
+
+After sample acceptance, scheduling can be offered as a separate explicit step.
+A selected time alone never activates automation. Keep manual use available
+while scheduled execution and recovery remain experimental.
 
 ## A short fictional report
 
@@ -100,24 +192,16 @@ is deliberately short and contains no personal history.
 
 ## Later use
 
-**User:** `$day-recap yesterday`
+- Daily report: `$day-recap yesterday` in the desktop agent.
+- Refresh: `$day-recap refresh yesterday`, then explicitly accept the candidate.
+  The current second-refresh defect remains tracked in TODO 1.
+- Weekly review: `$day-recap review the previous completed week`. Missing daily
+  reports remain visible; no evidence means no factual review.
+- Settings: rerun the terminal wizard and change the saved selections. Existing
+  reports stay unchanged unless the user requests a refresh.
 
-The agent generates yesterday's report or shows the existing report requested
-by the user. A scheduled check stays quiet for an already delivered report.
-A saved report with pending delivery is displayed without regenerating it.
+Scheduled runs reuse saved reports, retry pending delivery, and stay quiet for
+already delivered reports. TODO 4 makes this rule consistent across instructions.
 
-**User:** `$day-recap refresh yesterday`
-
-The agent prepares a candidate and preserves the current report. After the
-user asks to accept it, promotion keeps a backup. Repeating this cycle is the
-behavior required by TODO 1; the current implementation blocks a second refresh.
-
-**User:** `$day-recap review the previous completed week`
-
-The agent uses saved daily reports and names missing dates. With no daily
-evidence, it explains why it cannot write a factual weekly review.
-
-**User:** `Change setup: also include OpenCode.`
-
-After TODO 2, the agent updates the selected source list for future collections.
-Existing reports remain unchanged unless the user requests a refresh.
+The wizard changes setup interaction only. It adds no dashboard, accounts,
+provider credentials, or new conversation integrations.

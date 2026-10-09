@@ -6,10 +6,7 @@ reports and show missing days.
 
 **Status: early manual-use version.** The current implementation works inside
 Codex desktop. Python prepares dated evidence and saves files; the current
-agent writes the report. The public-beta work is tracked in [TODO.md](TODO.md).
-The [setup and usage example](docs/workflow-example.md) separates today's
-workflow from the proposed terminal setup wizard. The planned wizard uses menus,
-checkboxes, and a final review screen; it is not implemented yet.
+agent writes the report.
 
 ## What works today
 
@@ -22,8 +19,8 @@ checkboxes, and a final review screen; it is not implemented yet.
 - Existing-report reuse, refresh candidates, backups on promotion, and separate
   saved/delivered state.
 
-The current skill requires GPT-6.1 Sol High. Configurable runtime model choice
-is planned, not implemented. The Python code makes no model API calls itself.
+The current skill requires GPT-6.1 Sol High. The Python code makes no model
+API calls itself.
 
 ## Install for a manual trial
 
@@ -34,7 +31,6 @@ not supported by the current Unix file-locking code. macOS has not been verified
 From this repository directory, run:
 
 ```sh
-python3 -m unittest discover -s tests -q
 python3 build_bundle.py
 ```
 
@@ -62,7 +58,7 @@ reports. See the [skill instructions](skill/SKILL.md) for the complete procedure
 ## Coverage and privacy
 
 The reader currently tries every supported local source and filters coding
-sessions by the chosen work folders. Per-app selection is planned. ChatGPT
+sessions by the chosen work folders. Per-app selection is unavailable. ChatGPT
 currently covers accessible chats across all topics and needs the desktop
 agent to retrieve them. A CLI-only run cannot establish ChatGPT coverage.
 
@@ -76,32 +72,19 @@ and storage do **not** mean offline model processing. Reports and metadata can
 contain private topics, titles, and paths. Review them before sharing.
 
 Raw extracted text is written to private temporary directories. The skill
-instructs the agent to remove those files after saving; crash-safe cleanup is
-still planned. Readers apply limited redaction, which is not a guarantee that
+instructs the agent to remove those files after saving. An interrupted run can
+leave temporary extraction files behind. Readers apply limited redaction, which is not a guarantee that
 all sensitive text will be removed. No credentials are included in this project.
 
 ## Current limitations
 
 - Refreshing again after accepting a candidate is blocked by the leftover
-  candidate. This known defect is tracked as TODO 1.
+  candidate.
 - Metadata hardcodes the expected model instead of proving which model ran.
 - Some collection, review, cleanup, and delivery steps depend on agent behavior.
-- Scheduled generation, sleep recovery, and app-closed behavior need release
-  validation. Start with manual use. Saving a schedule preference does not
+- Scheduled generation, sleep recovery, and app-closed behavior are not yet verified. Start with manual use. Saving a schedule preference does not
   activate a desktop automation.
 - Model processing uses the user's existing runtime and its usage limits.
   No unlimited or zero-cost execution is promised.
 
-## Development
-
-`reader.py` parses evidence, `core.py` handles storage and due dates, and
-`cli.py` connects those operations. `skill/SKILL.md` tells the desktop agent how
-to collect ChatGPT pages and write reports. Tests use synthetic temporary data.
-
-Run `python3 -m unittest discover -s tests -q` after changes. Run
-`python3 build_bundle.py` to regenerate the installable skill. Generated bundles,
-personal reports, preferences, state, and local setup files are excluded from Git.
-
-The v1 plan retains the existing sources and avoids a provider SDK, server,
-database, or dashboard. No license has been selected yet; choosing one remains
-an explicit release task.
+No license has been selected for this repository.

@@ -24,3 +24,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+
+# Local development plans, reviews, and design notes
+TODO.md
+TODO-*.md
+PLAN.md
+*-plan.md
+DEVELOPMENT.md
+CONTRIBUTING.md
+EVIDENCE.md
+CHECKLIST.md
+docs/
+local-development-notes/
+tests/fixtures/weekly-review-example.md

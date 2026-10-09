@@ -1,90 +1,128 @@
-# Daily Recap
+<h1 align="center">Daily Recap</h1>
 
-Turn accessible AI conversations into a daily journal of what you worked on,
-learned, decided, and left unfinished. Weekly reviews connect the saved daily
-reports and show missing days.
+<p align="center">
+  Turn your AI conversations into a daily record of what you worked on, what changed, and what still needs attention.
+</p>
 
-**Status: early manual-use version.** The current implementation works inside
-Codex desktop. Python prepares dated evidence and saves files; the current
-agent writes the report.
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#a-day-at-a-glance">Example</a> ·
+  <a href="SETUP.md">Setup guide</a> ·
+  <a href="#privacy">Privacy</a>
+</p>
 
-## What works today
+<p align="center">Linux · Python 3.11+ · Codex desktop · MIT</p>
 
-- Local readers for Codex, Claude Code, Kimi Code, OpenCode, and Hermes.
-- ChatGPT collection through supported desktop history tools.
-- Workspace exclusions, local-date filtering, duplicate removal, and bounded
-  input segments.
-- Daily Markdown reports with compact source references in companion metadata.
-- Weekly input from saved daily reports, with missing and partial days shown.
-- Existing-report reuse, refresh candidates, backups on promotion, and separate
-  saved/delivered state.
+---
 
-The current skill requires GPT-6.1 Sol High. The Python code makes no model
-API calls itself.
+## Quick start
 
-## Install for a manual trial
+> Version 0.1.0 is a Linux manual-use beta. Start with one daily report. Scheduling is experimental.
 
-The tested environment is Linux with Python 3.11+ and the required Codex desktop
-history tools. Runtime Python code uses only the standard library. Windows is
-not supported by the current Unix file-locking code. macOS has not been verified.
-
-From this repository directory, run:
+Clone the project and install the skill:
 
 ```sh
+git clone https://github.com/snikmas/day-recap.git
+cd day-recap
 python3 build_bundle.py
+python3 release_check.py
+python3 manage_skill.py install ~/.agents/skills/day-recap
 ```
 
-The build creates `bundle/day-recap/` and `bundle/day-recap.zip`. Copy the
-**generated** `bundle/day-recap` folder into your user skill directory, normally
-`~/.agents/skills/day-recap`. Do not overwrite an existing skill. The source
-`skill/` folder alone does not include the Python scripts.
+Choose your apps, work folders, report storage, and writing model:
 
-In a Codex desktop chat, request:
+```sh
+python3 ~/.agents/skills/day-recap/scripts/cli.py setup
+```
+
+In a supported Codex desktop chat, ask:
 
 ```text
-$day-recap setup
-Use my chosen project folder and save reports outside it.
-Start with a manual sample. Do not enable a schedule.
+$day-recap yesterday
 ```
 
-Choose your own paths when asked. Keep the recap chat workspace excluded from
-collection so earlier reports do not feed back into new ones. Setup creates a
-local preferences file; it does not require editing a configuration template.
+The agent saves a Markdown report and shows the same text in chat. If the skill
+is missing, refresh skill discovery or restart the desktop app.
 
-For the next report, request `$day-recap yesterday`. For a weekly review,
-request `$day-recap review the previous completed week` after saving daily
-reports. See the [skill instructions](skill/SKILL.md) for the complete procedure.
+Already installed? Follow the [update instructions](SETUP.md#update-or-uninstall).
+For custom storage, exclusions, and terminal controls, see the [setup guide](SETUP.md).
 
-## Coverage and privacy
+## What it does
 
-The reader currently tries every supported local source and filters coding
-sessions by the chosen work folders. Per-app selection is unavailable. ChatGPT
-currently covers accessible chats across all topics and needs the desktop
-agent to retrieve them. A CLI-only run cannot establish ChatGPT coverage.
+- **Daily recaps.** Group related conversations into activities, outcomes, and unfinished work.
+- **Weekly reviews.** Connect saved daily reports and show which days are missing or incomplete.
+- **Useful observations.** Point out supported learning or workflow difficulties, including agent and tool problems. Goals are optional.
+- **Scope you choose.** Select apps and folders. ChatGPT requires a separate opt-in and supports excluded chat IDs.
+- **Refresh with review.** Preview a new version before replacing a report. Keep the previous text in a backup.
+- **Recoverable delivery.** Reuse a saved report after interruption and show it when delivery is still pending.
 
-The implemented ChatGPT workflow uses a bounded active-chat listing. Some
-assistant replies and attachment contents may be unavailable. Cursor is
-metadata-only. Missing access appears in coverage; a recap does not represent
-everything you did outside the available conversations.
+Python collects and prepares the evidence. Your current Codex desktop agent
+writes the recap using its selected model. The Python code makes no model API
+calls and requires no additional packages.
 
-Selected conversation text is processed by the Codex agent. Local collection
-and storage do **not** mean offline model processing. Reports and metadata can
-contain private topics, titles, and paths. Review them before sharing.
+## A day at a glance
 
-Raw extracted text is written to private temporary directories. The skill
-instructs the agent to remove those files after saving. An interrupted run can
-leave temporary extraction files behind. Readers apply limited redaction, which is not a guarantee that
-all sensitive text will be removed. No credentials are included in this project.
+This is a fictional example:
 
-## Current limitations
+> **October 8 · UTC**
+>
+> You fixed empty-row handling in an import parser and discussed duplicate records.
+>
+> **What you worked on**
+> - The empty-row fix passed the recorded checks. The larger-file test is still unfinished. (codex)
+> - You asked how duplicates should be handled. The assistant reply was unavailable, so the decision could not be confirmed. (chatgpt)
+>
+> **Problems and useful checks**
+> - Test a larger file before calling the parser complete. Confirm the duplicate rule before implementing it. (codex, chatgpt)
 
-- Refreshing again after accepting a candidate is blocked by the leftover
-  candidate.
-- Metadata hardcodes the expected model instead of proving which model ran.
-- Some collection, review, cleanup, and delivery steps depend on agent behavior.
-- Scheduled generation, sleep recovery, and app-closed behavior are not yet verified. Start with manual use. Saving a schedule preference does not
-  activate a desktop automation.
-- Model processing uses the user's existing runtime and its usage limits.
-  No unlimited or zero-cost execution is promised.
+Read the [full synthetic example](examples/daily-report.md). Report length follows
+the day's activity, and you can ask for a different format.
 
-No license has been selected for this repository.
+## Conversation sources
+
+| Source | Collection |
+| --- | --- |
+| Codex, Claude Code, Kimi Code, OpenCode, Hermes | Local history readers, filtered by selected work folders |
+| ChatGPT | Desktop history tools, with separate opt-in and chat exclusions |
+| Cursor | Metadata only; conversation text is unavailable |
+
+ChatGPT needs `list_threads`, `read_thread`, and `list_archived_threads` in the
+same desktop chat that runs the recap. Some histories or replies may be missing.
+The report describes these gaps; it cannot account for activity outside the
+selected conversations.
+
+## Privacy
+
+Selected conversation text goes to the current desktop agent. Local storage does
+not mean offline model processing. Reports can contain personal information,
+and redaction does not catch every sensitive detail.
+
+Raw extracts use private temporary folders. Successful saving cleans the report's
+own extraction folder. Interrupted attempts remain available for explicit recovery
+or cleanup. Keep reports and preferences outside the installed skill and out of Git.
+
+Review reports before sharing. See the [privacy and recovery details](SETUP.md#privacy-and-limits).
+
+## Current limits
+
+Linux is the initial supported platform. macOS is unverified; Windows is unsupported.
+Scheduled generation, delivery after sleep, and app-reopen recovery have not been
+verified end to end. Independent beta-user installation and usefulness are also
+still unverified.
+
+## Development
+
+Run the local checks:
+
+```sh
+python3 -m unittest discover -s tests -q
+python3 build_bundle.py
+python3 release_check.py
+```
+
+Bug reports and small fixes are welcome. Use synthetic examples when reporting
+an issue; do not attach personal histories, reports, or credentials.
+
+## License
+
+[MIT](LICENSE).

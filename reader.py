@@ -364,6 +364,7 @@ def _coverage(result, source):
             "unreadable": 0,
             "notes": [],
             "excluded_sessions": 0,
+            "excluded_records": 0,
         }
         result["__coverage"][source] = cov
     return cov
@@ -426,7 +427,7 @@ def _emit_entries(
             "session_id": str(session_id),
             "message_id": str(entry["message_id"]),
             "title": title,
-            "workspace": cwd,
+            "workspace": entry.get("workspace", cwd),
             "timestamp": _iso(entry["timestamp"]),
             "role": entry.get("role", "user"),
             "text": entry.get("text", ""),
@@ -448,7 +449,7 @@ def _emit_entries(
             "session_id": str(session_id),
             "message_id": str(entry["message_id"]),
             "title": title,
-            "workspace": cwd,
+            "workspace": entry.get("workspace", cwd),
             "timestamp": _iso(entry["timestamp"]),
             "role": entry.get("role", "user"),
             "text": entry.get("text", ""),
@@ -738,7 +739,6 @@ def _read_claude_file(path, day, zone, roots, excludes, result, context_cfg, cov
         return
 
     session_id = None
-    cwd = None
     is_sidechain = False
     staged = []
     for lineno, (obj, err) in enumerate(lines, start=1):
@@ -752,9 +752,6 @@ def _read_claude_file(path, day, zone, roots, excludes, result, context_cfg, cov
         sid = obj.get("sessionId") or obj.get("session_id")
         if sid:
             session_id = sid
-        c = obj.get("cwd")
-        if c:
-            cwd = c
         if obj.get("isSidechain"):
             is_sidechain = True
         staged.append((lineno, obj))
@@ -785,19 +782,36 @@ def _read_claude_file(path, day, zone, roots, excludes, result, context_cfg, cov
             "text": text,
             "kind": "message",
             "source_ref": f"claude:{path}:{lineno}:{mid}",
+            "cwd": obj.get("cwd"),
         })
 
-    if cwd is None:
-        if any(e.get("timestamp") and start <= e['timestamp'] < end for e in entries):
-            coverage["unknown_workspace"] += 1
-            _mark_partial(coverage, f"unknown cwd: {path}")
-        return
-    if not allowed(cwd, roots, excludes):
-        coverage['excluded_sessions'] += 1
+    # A Claude transcript can switch workspaces between records. Scope each
+    # record by its own recorded cwd so an excluded or unknown workspace never
+    # leaks into evidence or prior-day context, and keep each record's own
+    # workspace provenance instead of the transcript's final cwd.
+    scoped = []
+    saw_unknown = False
+    for entry in entries:
+        cwd = entry.get("cwd")
+        if cwd is None or (isinstance(cwd, str) and not cwd.strip()) or _canonical(cwd) is None:
+            if entry.get("timestamp") is not None and start <= entry["timestamp"] < end:
+                saw_unknown = True
+            continue
+        if not allowed(cwd, roots, excludes):
+            coverage["excluded_records"] = coverage.get("excluded_records", 0) + 1
+            continue
+        entry["workspace"] = cwd
+        scoped.append(entry)
+
+    if saw_unknown:
+        coverage["unknown_workspace"] += 1
+        _mark_partial(coverage, f"unknown cwd in {path}")
+
+    if not scoped:
         return
 
     _emit_entries(
-        result, "claude", session_id, cwd, None, entries, start, end, context_cfg, f"claude:{path}"
+        result, "claude", session_id, None, None, scoped, start, end, context_cfg, f"claude:{path}"
     )
 
 
@@ -945,6 +959,19 @@ def _read_opencode(root, day, zone, roots, excludes, home, result, context_cfg, 
             _mark_partial(coverage, f"schema error: {db_path}")
             return
 
+        # A missing message-parts table means text is unavailable for the whole
+        # database. Report that as partial coverage instead of a silent empty day.
+        try:
+            part_available = cur.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='part'"
+            ).fetchone() is not None
+        except sqlite3.Error:
+            part_available = False
+        if not part_available:
+            coverage["unreadable"] += 1
+            _mark_partial(coverage, f"missing part table: message text unavailable in {db_path}")
+            return
+
         valid = {}
         unknown_sessions = 0
         for sid, directory, title in sessions:
@@ -1033,6 +1060,8 @@ def _opencode_message_text(cur, message_id, coverage):
     try:
         rows = cur.execute("SELECT data FROM part WHERE message_id = ?", (message_id,)).fetchall()
     except sqlite3.Error:
+        coverage["unreadable"] += 1
+        _mark_partial(coverage, "part query failed; message text unavailable")
         return ""
     parts = []
     for (data_json,) in rows:
@@ -1162,7 +1191,9 @@ def _finalize_coverage(result):
         cov = result["__coverage"].get(source)
         if cov is None:
             cov = _coverage(result, source)
-        if source == 'chatgpt':
+        if cov['status'] == 'disabled':
+            pass
+        elif source == 'chatgpt':
             cov['status'] = 'unavailable'
             cov['notes'] = ['Desktop ChatGPT collection is required.']
         elif cov['status'] not in ('not_present', 'metadata-only'):
@@ -1181,7 +1212,7 @@ def _finalize_coverage(result):
 # --- collect ------------------------------------------------------------
 
 
-def collect(day, zone, roots, excludes=(), home=None):
+def collect(day, zone, roots, excludes=(), home=None, enabled_sources=None):
     """Collect history records for the given local day across known sources."""
     if home is None:
         home = Path.home()
@@ -1205,8 +1236,18 @@ def collect(day, zone, roots, excludes=(), home=None):
         ("cursor", os.path.join(home, ".config", "Cursor", "User"), _read_cursor),
     ]
 
+    enabled = set(enabled_sources) if enabled_sources is not None else {s[0] for s in sources} | {'chatgpt'}
+    unknown = enabled - {s[0] for s in sources} - {'chatgpt'}
+    if unknown:
+        raise ValueError('Unknown history source selected.')
+    if 'chatgpt' not in enabled:
+        _coverage(result, 'chatgpt')['status'] = 'disabled'
     for source, root, func in sources:
         coverage = _coverage(result, source)
+        if source not in enabled:
+            coverage['status'] = 'disabled'
+            coverage['notes'] = ['Not selected; history files were not read.']
+            continue
         try:
             func(root, day, zone, roots, excludes, home, result, context_cfg, coverage)
         except Exception as exc:  # noqa: BLE001 - keep other sources collecting
@@ -1232,7 +1273,7 @@ def _clean_ref(text):
     return re.sub(r"::chatgpt-content-reference\{[^}]*\}", "", text).strip()
 
 
-def desktop_pages(pages, day, zone):
+def desktop_pages(pages, day, zone, excluded_chats=()):
     """Normalize ChatGPT read_thread JSON pages supplied by the lead."""
     start, end = window(day, zone)
     records = []
@@ -1275,6 +1316,9 @@ def desktop_pages(pages, day, zone):
         thread = page.get("thread") or {}
         page_meta = page.get("page") or {}
         tid = thread.get("id") or "unknown"
+        if str(tid) in set(excluded_chats):
+            status['excluded_sessions'] += 1
+            continue
         title = thread.get("title")
         entry = threads.setdefault(tid, {"title": title})
         if title and not entry.get("title"):

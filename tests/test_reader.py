@@ -503,6 +503,119 @@ class CollectClaudeTests(unittest.TestCase):
         self.assertGreaterEqual(cov["excluded_sessions"], 1)
         self.assertFalse(any(r["source"] == "claude" for r in result["records"]))
 
+    def test_claude_mixed_workspace_filters_per_record(self):
+        excluded = self.ws / "excluded"
+        excluded.mkdir()
+        path = self.home / ".claude" / "projects" / "p" / "mixed.jsonl"
+        rows = [
+            {"sessionId": "s", "cwd": str(excluded), "uuid": "e1",
+             "timestamp": iso(DAY_TS), "message": {"role": "user", "content": "excluded one"}},
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "a1",
+             "timestamp": iso(DAY_TS + dt.timedelta(minutes=1)),
+             "message": {"role": "user", "content": "allowed one"}},
+            {"sessionId": "s", "cwd": str(excluded), "uuid": "e2",
+             "timestamp": iso(DAY_TS + dt.timedelta(minutes=2)),
+             "message": {"role": "user", "content": "excluded two"}},
+        ]
+        _write(path, "".join(_line(r) for r in rows))
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], [str(excluded)], home=self.home)
+        texts = [r["text"] for r in result["records"]]
+        self.assertIn("allowed one", texts)
+        self.assertNotIn("excluded one", texts)
+        self.assertNotIn("excluded two", texts)
+        self.assertEqual([r["workspace"] for r in result["records"]], [str(self.ws)])
+        cov = [c for c in result["coverage"] if c["source"] == "claude"][0]
+        self.assertGreaterEqual(cov["excluded_records"], 2)
+
+    def test_claude_allowed_then_excluded_keeps_allowed_record(self):
+        excluded = self.ws / "excluded"
+        excluded.mkdir()
+        path = self.home / ".claude" / "projects" / "p" / "order.jsonl"
+        rows = [
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "a1",
+             "timestamp": iso(DAY_TS), "message": {"role": "user", "content": "allowed first"}},
+            {"sessionId": "s", "cwd": str(excluded), "uuid": "e1",
+             "timestamp": iso(DAY_TS + dt.timedelta(minutes=1)),
+             "message": {"role": "user", "content": "excluded last"}},
+        ]
+        _write(path, "".join(_line(r) for r in rows))
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], [str(excluded)], home=self.home)
+        self.assertEqual([r["text"] for r in result["records"]], ["allowed first"])
+
+    def test_claude_excluded_records_survive_allowed_final_cwd(self):
+        # The transcript's final cwd is allowed; the earlier excluded record
+        # must still be dropped and must not inherit the final workspace.
+        excluded = self.ws / "excluded"
+        excluded.mkdir()
+        path = self.home / ".claude" / "projects" / "p" / "finalallowed.jsonl"
+        rows = [
+            {"sessionId": "s", "cwd": str(excluded), "uuid": "e1",
+             "timestamp": iso(DAY_TS), "message": {"role": "user", "content": "excluded first"}},
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "a1",
+             "timestamp": iso(DAY_TS + dt.timedelta(minutes=1)),
+             "message": {"role": "user", "content": "allowed last"}},
+        ]
+        _write(path, "".join(_line(r) for r in rows))
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], [str(excluded)], home=self.home)
+        self.assertEqual([r["text"] for r in result["records"]], ["allowed last"])
+        self.assertEqual([r["workspace"] for r in result["records"]], [str(self.ws)])
+        cov = [c for c in result["coverage"] if c["source"] == "claude"][0]
+        self.assertGreaterEqual(cov["excluded_records"], 1)
+
+    def test_claude_relative_cwd_is_unknown_and_not_leaked(self):
+        path = self.home / ".claude" / "projects" / "p" / "relative.jsonl"
+        rows = [
+            {"sessionId": "s", "cwd": "relative/project", "uuid": "r1",
+             "timestamp": iso(DAY_TS), "message": {"role": "user", "content": "relative cwd"}},
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "a1",
+             "timestamp": iso(DAY_TS + dt.timedelta(minutes=1)),
+             "message": {"role": "user", "content": "allowed"}},
+        ]
+        _write(path, "".join(_line(r) for r in rows))
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], (), home=self.home)
+        self.assertEqual([r["text"] for r in result["records"]], ["allowed"])
+        cov = [c for c in result["coverage"] if c["source"] == "claude"][0]
+        self.assertGreaterEqual(cov["unknown_workspace"], 1)
+        self.assertEqual(cov["status"], "partial")
+
+    def test_claude_missing_cwd_record_not_leaked(self):
+        path = self.home / ".claude" / "projects" / "p" / "mixedmissing.jsonl"
+        rows = [
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "a1",
+             "timestamp": iso(DAY_TS), "message": {"role": "user", "content": "allowed"}},
+            {"sessionId": "s", "uuid": "u1", "timestamp": iso(DAY_TS + dt.timedelta(minutes=1)),
+             "message": {"role": "user", "content": "missing cwd"}},
+        ]
+        _write(path, "".join(_line(r) for r in rows))
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], (), home=self.home)
+        self.assertEqual([r["text"] for r in result["records"]], ["allowed"])
+        cov = [c for c in result["coverage"] if c["source"] == "claude"][0]
+        self.assertGreaterEqual(cov["unknown_workspace"], 1)
+        self.assertEqual(cov["status"], "partial")
+
+    def test_claude_prior_day_context_respects_scope(self):
+        excluded = self.ws / "excluded"
+        excluded.mkdir()
+        path = self.home / ".claude" / "projects" / "p" / "ctx.jsonl"
+        rows = [
+            {"sessionId": "s", "cwd": str(excluded), "uuid": "pe",
+             "timestamp": iso(PREV_TS), "message": {"role": "user", "content": "prior excluded"}},
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "pa",
+             "timestamp": iso(PREV_TS + dt.timedelta(minutes=1)),
+             "message": {"role": "user", "content": "prior allowed"}},
+            {"sessionId": "s", "cwd": str(self.ws), "uuid": "ta",
+             "timestamp": iso(DAY_TS), "message": {"role": "user", "content": "today allowed"}},
+        ]
+        _write(path, "".join(_line(r) for r in rows))
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], [str(excluded)], home=self.home)
+        texts = [r["text"] for r in result["records"]]
+        self.assertIn("today allowed", texts)
+        self.assertIn("prior allowed", texts)
+        self.assertNotIn("prior excluded", texts)
+        by_id = {r["message_id"]: r for r in result["records"]}
+        self.assertEqual(by_id["pa"]["kind"], "context")
+        self.assertEqual(by_id["pa"]["workspace"], str(self.ws))
+
 
 class CollectKimiTests(unittest.TestCase):
     def setUp(self):
@@ -633,6 +746,70 @@ class CollectSqliteTests(unittest.TestCase):
         reader.collect("2026-10-09", "UTC", [str(self.ws)], (), home=self.home)
         after = db.read_bytes()
         self.assertEqual(before, after)
+
+    def test_opencode_missing_part_table_is_partial(self):
+        db_dir = self.home / ".local" / "share" / "opencode"
+        db_dir.mkdir(parents=True)
+        db = db_dir / "opencode.db"
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE session (id TEXT, directory TEXT, title TEXT)")
+        conn.execute("CREATE TABLE message (id TEXT, session_id TEXT, time_created REAL, data TEXT)")
+        conn.execute("INSERT INTO session VALUES (?, ?, ?)", ("s1", str(self.ws), "T"))
+        conn.execute("INSERT INTO message VALUES (?, ?, ?, ?)",
+                     ("m1", "s1", DAY_EPOCH * 1000, json.dumps({"role": "user"})))
+        conn.commit()
+        conn.close()
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], (), home=self.home)
+        cov = [c for c in result["coverage"] if c["source"] == "opencode"][0]
+        self.assertEqual(cov["status"], "partial")
+        self.assertGreaterEqual(cov["unreadable"], 1)
+        self.assertEqual(result["records"], [])
+        self.assertTrue(any("part" in n for n in cov["notes"]))
+
+    def test_opencode_missing_part_table_preserves_other_sources(self):
+        db_dir = self.home / ".local" / "share" / "opencode"
+        db_dir.mkdir(parents=True)
+        db = db_dir / "opencode.db"
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE session (id TEXT, directory TEXT, title TEXT)")
+        conn.execute("CREATE TABLE message (id TEXT, session_id TEXT, time_created REAL, data TEXT)")
+        conn.execute("INSERT INTO session VALUES (?, ?, ?)", ("s1", str(self.ws), "T"))
+        conn.execute("INSERT INTO message VALUES (?, ?, ?, ?)",
+                     ("m1", "s1", DAY_EPOCH * 1000, json.dumps({"role": "user"})))
+        conn.commit()
+        conn.close()
+        codex_path = self.home / ".codex" / "sessions" / "rollout-1.jsonl"
+        body = _line({"type": "session_meta", "payload": {"id": "c1", "cwd": str(self.ws)}})
+        body += _line({"type": "response_item",
+                       "payload": {"type": "message", "id": "cm1", "role": "user",
+                                   "timestamp": iso(DAY_TS),
+                                   "content": [{"type": "input_text", "text": "codex msg"}]}})
+        _write(codex_path, body)
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], (), home=self.home,
+                                enabled_sources=["opencode", "codex"])
+        self.assertTrue(any(r["source"] == "codex" for r in result["records"]))
+        cov = [c for c in result["coverage"] if c["source"] == "opencode"][0]
+        self.assertEqual(cov["status"], "partial")
+
+    def test_opencode_part_query_error_is_partial(self):
+        db_dir = self.home / ".local" / "share" / "opencode"
+        db_dir.mkdir(parents=True)
+        db = db_dir / "opencode.db"
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE session (id TEXT, directory TEXT, title TEXT)")
+        conn.execute("CREATE TABLE message (id TEXT, session_id TEXT, time_created REAL, data TEXT)")
+        # A part table that exists but cannot be queried by message_id.
+        conn.execute("CREATE TABLE part (bogus TEXT)")
+        conn.execute("INSERT INTO session VALUES (?, ?, ?)", ("s1", str(self.ws), "T"))
+        conn.execute("INSERT INTO message VALUES (?, ?, ?, ?)",
+                     ("m1", "s1", DAY_EPOCH * 1000, json.dumps({"role": "user"})))
+        conn.commit()
+        conn.close()
+        result = reader.collect("2026-10-09", "UTC", [str(self.ws)], (), home=self.home)
+        cov = [c for c in result["coverage"] if c["source"] == "opencode"][0]
+        self.assertEqual(cov["status"], "partial")
+        self.assertGreaterEqual(cov["unreadable"], 1)
+        self.assertTrue(any("unavailable" in n for n in cov["notes"]))
 
     def test_hermes_readonly(self):
         db_dir = self.home / ".hermes"

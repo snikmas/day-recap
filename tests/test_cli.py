@@ -43,7 +43,7 @@ class IntegrationTests(unittest.TestCase):
     def test_setup_preserves_native_schedule_identity(self):
         self.cfg['schedule'].update(automation_id='daily-recap',runtime='heartbeat')
         core.json_write(self.root/'preferences.json',self.cfg)
-        self.run_cli('setup','--root',str(self.root),'--start-date','2026-10-09')
+        self.run_cli('setup','--root',str(self.root),'--source','codex','--accept-data-notice','--start-date','2026-10-09')
         saved=core.read_json(self.root/'preferences.json')
         self.assertEqual(saved['schedule']['automation_id'],'daily-recap')
         self.assertEqual(saved['schedule']['start_date'],'2026-10-08')

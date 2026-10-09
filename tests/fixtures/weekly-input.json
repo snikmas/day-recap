@@ -1,0 +1,47 @@
+{
+  "week": "2026-W40",
+  "start": "2026-09-28",
+  "end": "2026-10-04",
+  "days": [
+    {
+      "date": "2026-09-28",
+      "report": "Synthetic fixture: a parser was drafted. Two failing boundary checks remained. (codex)",
+      "source_ref": "fixture:2026-09-28",
+      "timezone": "Asia/Shanghai",
+      "coverage": [
+        {
+          "source": "codex",
+          "status": "read"
+        }
+      ],
+      "edited": false
+    },
+    {
+      "date": "2026-09-30",
+      "report": "Synthetic fixture: parser boundary checks passed after a fix. Desktop replies remained unavailable. A public-audio test was planned but not run. (codex, chatgpt)",
+      "source_ref": "fixture:2026-09-30",
+      "timezone": "Asia/Shanghai",
+      "coverage": [
+        {
+          "source": "codex",
+          "status": "read"
+        },
+        {
+          "source": "chatgpt",
+          "status": "partial"
+        }
+      ],
+      "edited": false
+    }
+  ],
+  "missing_days": [
+    "2026-09-29",
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03",
+    "2026-10-04"
+  ],
+  "partial_days": [
+    "2026-09-30"
+  ]
+}

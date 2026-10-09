@@ -1,0 +1,26 @@
+# Private local choices and generated reports
+preferences.json
+config.json
+setup-answers.json
+state.json
+state/
+reports/
+day-recap-data/
+.run.lock
+*.meta.json
+*.candidate.md
+*.previous-*.md
+runtime-validation.json
+
+# Credentials must never enter the repository
+.env
+.env.*
+*.pem
+*.key
+
+# Build output and Python caches
+bundle/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
